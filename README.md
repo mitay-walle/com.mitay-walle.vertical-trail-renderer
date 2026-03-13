@@ -4,15 +4,13 @@ The issue is discussed here:
 https://discussions.unity.com/t/vertical-line-using-line-renderer-with-transform-z/762604
 
 # Solution
-`VerticalTrailRenderer` generates a custom trail mesh instead of `LineRenderer`.  
+`VerticalTrailRenderer`-script that generates a mesh.  
 It records object movement and builds a vertical quad strip using a [Mesh](https://docs.unity3d.com/Manual/class-Mesh.html) rendered by a [MeshRenderer](https://docs.unity3d.com/Manual/class-MeshRenderer.html).
 
 - vertical trail generated from movement points  
 - configurable lifetime and fade  
 - fixed buffers to avoid GC  
 - works in edit mode via [ExecuteAlways](https://docs.unity3d.com/ScriptReference/ExecuteAlways.html)
-
-Script: :contentReference[oaicite:0]{index=0}
 
 # Installation
 - Place the script anywhere inside **`Project/Assets/`** in a Unity project
