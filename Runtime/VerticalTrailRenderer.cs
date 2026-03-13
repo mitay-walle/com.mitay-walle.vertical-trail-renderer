@@ -1,10 +1,35 @@
+using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace mitaywalle
 {
 	[ExecuteAlways]
+	[RequireComponent(typeof(MeshFilter))]
 	public class VerticalTrailRenderer : MonoBehaviour
 	{
+		public enum UpMode
+		{
+			World,
+			Local,
+			CachedPerPoint
+		}
+
+		private static readonly ProfilerMarker UpdateMarker = new("VerticalTrailRenderer.Update");
+		private static readonly ProfilerMarker InitializeMeshMarker = new("VerticalTrailRenderer.InitializeMesh");
+		private static readonly ProfilerMarker AddPointMarker = new("VerticalTrailRenderer.AddPoint");
+		private static readonly ProfilerMarker RemoveOldPointsMarker = new("VerticalTrailRenderer.RemoveOldPoints");
+		private static readonly ProfilerMarker UpdateMeshMarker = new("VerticalTrailRenderer.UpdateMesh");
+		private static readonly ProfilerMarker ClearUnusedVerticesMarker = new("VerticalTrailRenderer.ClearUnusedVertices");
+		private static readonly ProfilerMarker BuildVerticesMarker = new("VerticalTrailRenderer.BuildVertices");
+		private static readonly ProfilerMarker ClearUnusedTrianglesMarker = new("VerticalTrailRenderer.ClearUnusedTriangles");
+		private static readonly ProfilerMarker BuildTrianglesMarker = new("VerticalTrailRenderer.BuildTriangles");
+		private static readonly ProfilerMarker UploadMeshMarker = new("VerticalTrailRenderer.UploadMesh");
+		private static readonly ProfilerMarker RecalculateNormalsMarker = new("VerticalTrailRenderer.RecalculateNormals");
+		private static readonly ProfilerMarker RecalculateBoundsMarker = new("VerticalTrailRenderer.RecalculateBounds");
+		private static readonly ProfilerMarker RenderMeshMarker = new("VerticalTrailRenderer.RenderMesh");
+		private static readonly ProfilerMarker ValidateMarker = new("VerticalTrailRenderer.Validate");
+
 		[SerializeField] private int _maxSegments = 250;
 		[SerializeField] private float _minDistance = 0.2f;
 		[SerializeField] private float _wallHeight = 5f;
@@ -12,88 +37,72 @@ namespace mitaywalle
 		[SerializeField] private bool _fadeTrail = true;
 		[SerializeField] private AnimationCurve _fadeCurve = AnimationCurve.EaseInOut(0, 1, 1, 0);
 		[SerializeField] private Material _trailMaterial;
+		[SerializeField] private UpMode _upMode = UpMode.World;
 
-		[SerializeField] private GameObject _trailObject;
+		[SerializeField] private ShadowCastingMode _shadowCastingMode = ShadowCastingMode.Off;
+		[SerializeField] private bool _receiveShadows;
+		[SerializeField] private bool _motionVectors;
+		[SerializeField] private uint _renderingLayerMask = 1;
+		[SerializeField] private LightProbeUsage _lightProbeUsage = LightProbeUsage.Off;
+		[SerializeField] private LightProbeProxyVolume _lightProbeProxyVolumeOverride;
+
 		private MeshFilter _meshFilter;
-		private MeshRenderer _meshRenderer;
 		private Mesh _mesh;
+		private MaterialPropertyBlock _matProps;
 
-		// Фиксированные массивы для избежания GC
 		private Vector3[] _vertices;
 		private Vector2[] _uvs;
 		private Color[] _colors;
 		private int[] _triangles;
 
-		// Данные точек
 		private Vector3[] _points;
+		private Vector3[] _pointUps;
 		private float[] _pointTimes;
-		private int _pointCount = 0;
+		private int _pointCount;
 		private Vector3 _lastPos;
+
+		private Bounds _worldBounds;
 
 		private void OnEnable()
 		{
-			CreateTrailObject();
+			_meshFilter = GetComponent<MeshFilter>();
+			_matProps ??= new MaterialPropertyBlock();
 			InitializeMesh();
-			if (_trailObject != null)
-				_trailObject.SetActive(true);
 		}
 
-		private void OnDisable()
+		private void OnValidate()
 		{
-			if (_trailObject != null)
-				_trailObject.SetActive(false);
-		}
+			using var _ = ValidateMarker.Auto();
 
-		private void CreateTrailObject()
-		{
-			// Создаем отдельный объект для рендеринга трейла
-			if (_trailObject == null)
-			{
-				_trailObject = new GameObject("Trail_" + gameObject.name);
-				_trailObject.transform.SetParent(null); // Независимый от родителя
-				_trailObject.transform.position = Vector3.zero;
-				_trailObject.transform.rotation = Quaternion.identity;
-				_trailObject.transform.localScale = Vector3.one;
+			_meshFilter = GetComponent<MeshFilter>();
+			_matProps ??= new MaterialPropertyBlock();
 
-				_meshFilter = _trailObject.AddComponent<MeshFilter>();
-				_meshRenderer = _trailObject.AddComponent<MeshRenderer>();
+			if (_maxSegments < 1)
+				_maxSegments = 1;
 
-				if (_trailMaterial != null)
-					_meshRenderer.material = _trailMaterial;
-			}
-			else
-			{
-				_meshFilter = _trailObject.GetComponent<MeshFilter>();
-				_meshRenderer = _trailObject.GetComponent<MeshRenderer>();
+			if (_minDistance < 0f)
+				_minDistance = 0f;
 
-				if (_trailMaterial != null)
-					_meshRenderer.material = _trailMaterial;
-			}
-		}
+			if (_trailLifetime < 0f)
+				_trailLifetime = 0f;
 
-		private void Validate()
-		{
-			if (_maxSegments > 0)
-			{
-				if (_trailObject == null)
-					CreateTrailObject();
+			if (_wallHeight < 0f)
+				_wallHeight = 0f;
 
-				InitializeMesh();
-			}
+			if (!isActiveAndEnabled)
+				return;
 
-			// Обновляем материал если он изменился
-			if (_meshRenderer != null && _trailMaterial != null)
-			{
-				_meshRenderer.material = _trailMaterial;
-			}
+			InitializeMesh();
 		}
 
 		private void Update()
 		{
-			if (_trailObject == null)
-				CreateTrailObject();
+			using var _ = UpdateMarker.Auto();
 
-			if (_points == null)
+			if (_meshFilter == null)
+				_meshFilter = GetComponent<MeshFilter>();
+
+			if (_points == null || _mesh == null)
 				InitializeMesh();
 
 			Vector3 pos = transform.position;
@@ -102,14 +111,18 @@ namespace mitaywalle
 
 			RemoveOldPoints();
 			UpdateMesh();
+
+			if (_mesh != null && _trailMaterial != null && _pointCount >= 2)
+				RenderMesh();
 		}
 
 		private void InitializeMesh()
 		{
-			if (!_meshFilter) return;
-			if (_maxSegments <= 0) return;
+			using var _ = InitializeMeshMarker.Auto();
 
-			// Создаем массивы фиксированного размера
+			if (_meshFilter == null || _maxSegments <= 0)
+				return;
+
 			int maxVertices = (_maxSegments + 1) * 2;
 			int maxTriangles = _maxSegments * 6;
 
@@ -119,23 +132,29 @@ namespace mitaywalle
 			_triangles = new int[maxTriangles];
 
 			_points = new Vector3[_maxSegments + 1];
+			_pointUps = new Vector3[_maxSegments + 1];
 			_pointTimes = new float[_maxSegments + 1];
 			_pointCount = 0;
+			_lastPos = transform.position;
+			_worldBounds = new Bounds(transform.position, Vector3.zero);
 
-			// Создаем меш
 			if (_mesh == null)
 			{
-				_mesh = new Mesh();
-				_mesh.name = "VerticalTrail";
+				_mesh = new Mesh
+				{
+					name = "VerticalTrail"
+				};
+				_mesh.MarkDynamic();
+			}
+			else
+			{
+				_mesh.Clear();
 			}
 
-			_mesh.Clear();
 			_mesh.vertices = _vertices;
 			_mesh.uv = _uvs;
 			_mesh.colors = _colors;
 			_mesh.triangles = _triangles;
-			_mesh.RecalculateNormals();
-
 			_meshFilter.sharedMesh = _mesh;
 
 			if (Application.isPlaying)
@@ -144,10 +163,13 @@ namespace mitaywalle
 
 		private void AddPoint(Vector3 basePos)
 		{
+			using var _ = AddPointMarker.Auto();
+
 			if (_pointCount >= _maxSegments + 1)
 				return;
 
 			_points[_pointCount] = basePos;
+			_pointUps[_pointCount] = transform.up;
 			_pointTimes[_pointCount] = Time.time;
 			_pointCount++;
 			_lastPos = basePos;
@@ -155,10 +177,11 @@ namespace mitaywalle
 
 		private void RemoveOldPoints()
 		{
+			using var _ = RemoveOldPointsMarker.Auto();
+
 			float currentTime = Time.time;
 			int removeCount = 0;
 
-			// Подсчитываем сколько старых точек нужно удалить
 			for (int i = 0; i < _pointCount; i++)
 			{
 				if (currentTime - _pointTimes[i] > _trailLifetime)
@@ -167,24 +190,45 @@ namespace mitaywalle
 					break;
 			}
 
-			if (removeCount > 0)
-			{
-				// Сдвигаем массивы без создания новых
-				for (int i = 0; i < _pointCount - removeCount; i++)
-				{
-					_points[i] = _points[i + removeCount];
-					_pointTimes[i] = _pointTimes[i + removeCount];
-				}
+			if (removeCount <= 0)
+				return;
 
-				_pointCount -= removeCount;
+			for (int i = 0; i < _pointCount - removeCount; i++)
+			{
+				_points[i] = _points[i + removeCount];
+				_pointUps[i] = _pointUps[i + removeCount];
+				_pointTimes[i] = _pointTimes[i + removeCount];
+			}
+
+			_pointCount -= removeCount;
+		}
+
+		private Vector3 GetUp(int index)
+		{
+			switch (_upMode)
+			{
+				case UpMode.World:
+					return Vector3.up;
+				case UpMode.Local:
+					return transform.up;
+				case UpMode.CachedPerPoint:
+					return _pointUps[index];
+				default:
+					return transform.up;
 			}
 		}
 
 		private void UpdateMesh()
 		{
+			using var _ = UpdateMeshMarker.Auto();
+
+			if (_mesh == null)
+				return;
+
 			if (_pointCount < 2)
 			{
 				_mesh.Clear();
+				_worldBounds = new Bounds(transform.position, Vector3.zero);
 				return;
 			}
 
@@ -192,94 +236,139 @@ namespace mitaywalle
 			int triangleIndex = 0;
 			float currentTime = Time.time;
 
-			// Очищаем неиспользуемые вертексы
-			for (int i = _pointCount * 2; i < _vertices.Length; i++)
+			Vector3 min = new(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+			Vector3 max = new(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
 			{
-				_vertices[i] = Vector3.zero;
-				_colors[i] = Color.clear;
-			}
+				using var __ = ClearUnusedVerticesMarker.Auto();
 
-			// Генерируем вертексы в мировых координатах (трейл-объект имеет identity transform)
-			for (int i = 0; i < _pointCount; i++)
-			{
-				Vector3 worldBasePos = _points[i];
-				Vector3 worldTopPos = worldBasePos + transform.up * _wallHeight;
-
-				// Поскольку трейл-объект находится в identity transform, используем мировые координаты напрямую
-				_vertices[vertexIndex] = worldBasePos;
-				_vertices[vertexIndex + 1] = worldTopPos;
-
-				// UV координаты
-				float u = _pointCount > 1 ? (float)i / (_pointCount - 1) : 0f;
-				_uvs[vertexIndex] = new Vector2(u, 0f);
-				_uvs[vertexIndex + 1] = new Vector2(u, 1f);
-
-				// Цвет с альфой для фейдинга
-				Color color = Color.white;
-				if (_fadeTrail)
+				for (int i = _pointCount * 2; i < _vertices.Length; i++)
 				{
-					float age = currentTime - _pointTimes[i];
-					float normalizedAge = Mathf.Clamp01(age / _trailLifetime);
-					float alpha = _fadeCurve.Evaluate(1f - normalizedAge); // Инвертируем для правильного фейда
-					color.a = alpha;
+					_vertices[i] = Vector3.zero;
+					_uvs[i] = Vector2.zero;
+					_colors[i] = Color.clear;
 				}
-
-				_colors[vertexIndex] = color;
-				_colors[vertexIndex + 1] = color;
-
-				vertexIndex += 2;
 			}
 
-			// Очищаем неиспользуемые треугольники
-			for (int i = (_pointCount - 1) * 6; i < _triangles.Length; i++)
 			{
-				_triangles[i] = 0;
+				using var __ = BuildVerticesMarker.Auto();
+
+				for (int i = 0; i < _pointCount; i++)
+				{
+					Vector3 worldBasePos = _points[i];
+					Vector3 worldTopPos = worldBasePos + GetUp(i) * _wallHeight;
+
+					_vertices[vertexIndex] = worldBasePos;
+					_vertices[vertexIndex + 1] = worldTopPos;
+
+					float u = _pointCount > 1 ? (float)i / (_pointCount - 1) : 0f;
+					_uvs[vertexIndex] = new Vector2(u, 0f);
+					_uvs[vertexIndex + 1] = new Vector2(u, 1f);
+
+					Color color = Color.white;
+					if (_fadeTrail)
+					{
+						float age = currentTime - _pointTimes[i];
+						float normalizedAge = _trailLifetime > 0f
+							? Mathf.Clamp01(age / _trailLifetime)
+							: 1f;
+						color.a = _fadeCurve.Evaluate( normalizedAge);
+					}
+
+					_colors[vertexIndex] = color;
+					_colors[vertexIndex + 1] = color;
+
+					min = Vector3.Min(min, worldBasePos);
+					min = Vector3.Min(min, worldTopPos);
+					max = Vector3.Max(max, worldBasePos);
+					max = Vector3.Max(max, worldTopPos);
+
+					vertexIndex += 2;
+				}
 			}
 
-			// Генерируем треугольники
-			for (int i = 0; i < _pointCount - 1; i++)
 			{
-				int baseIndex = i * 2;
+				using var __ = ClearUnusedTrianglesMarker.Auto();
 
-				// Первый треугольник
-				_triangles[triangleIndex] = baseIndex;
-				_triangles[triangleIndex + 1] = baseIndex + 1;
-				_triangles[triangleIndex + 2] = baseIndex + 2;
-
-				// Второй треугольник
-				_triangles[triangleIndex + 3] = baseIndex + 1;
-				_triangles[triangleIndex + 4] = baseIndex + 3;
-				_triangles[triangleIndex + 5] = baseIndex + 2;
-
-				triangleIndex += 6;
+				for (int i = (_pointCount - 1) * 6; i < _triangles.Length; i++)
+					_triangles[i] = 0;
 			}
 
-			// Обновляем меш без создания GC
-			_mesh.vertices = _vertices;
-			_mesh.uv = _uvs;
-			_mesh.colors = _colors;
-			_mesh.triangles = _triangles;
-			_mesh.RecalculateNormals();
-			_mesh.RecalculateBounds();
+			{
+				using var __ = BuildTrianglesMarker.Auto();
+
+				for (int i = 0; i < _pointCount - 1; i++)
+				{
+					int baseIndex = i * 2;
+
+					_triangles[triangleIndex] = baseIndex;
+					_triangles[triangleIndex + 1] = baseIndex + 1;
+					_triangles[triangleIndex + 2] = baseIndex + 2;
+
+					_triangles[triangleIndex + 3] = baseIndex + 1;
+					_triangles[triangleIndex + 4] = baseIndex + 3;
+					_triangles[triangleIndex + 5] = baseIndex + 2;
+
+					triangleIndex += 6;
+				}
+			}
+
+			{
+				using var __ = UploadMeshMarker.Auto();
+				_mesh.vertices = _vertices;
+				_mesh.uv = _uvs;
+				_mesh.colors = _colors;
+				_mesh.triangles = _triangles;
+			}
+
+			{
+				using var __ = RecalculateNormalsMarker.Auto();
+				_mesh.RecalculateNormals();
+			}
+
+			{
+				using var __ = RecalculateBoundsMarker.Auto();
+				_mesh.RecalculateBounds();
+			}
+
+			_worldBounds.SetMinMax(min, max);
+		}
+
+		private void RenderMesh()
+		{
+			using var _ = RenderMeshMarker.Auto();
+
+			var rp = new RenderParams(_trailMaterial)
+			{
+				layer = gameObject.layer,
+				renderingLayerMask = _renderingLayerMask,
+				worldBounds = _worldBounds,
+				shadowCastingMode = _shadowCastingMode,
+				receiveShadows = _receiveShadows,
+				motionVectorMode = _motionVectors ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
+				lightProbeUsage = _lightProbeUsage,
+				lightProbeProxyVolume = _lightProbeProxyVolumeOverride,
+				matProps = _matProps
+			};
+
+			Graphics.RenderMesh(rp, _mesh, 0, Matrix4x4.identity);
+		}
+
+		private void OnDisable()
+		{
+			if (_mesh != null)
+				_mesh.Clear();
 		}
 
 		private void OnDestroy()
 		{
-			if (_mesh != null)
-			{
-				if (Application.isPlaying)
-					Destroy(_mesh);
-				else
-					DestroyImmediate(_mesh);
-			}
+			if (_mesh == null)
+				return;
 
-			if (_trailObject != null)
-			{
-				if (Application.isPlaying)
-					Destroy(_trailObject);
-				else
-					DestroyImmediate(_trailObject);
-			}
+			if (Application.isPlaying)
+				Destroy(_mesh);
+			else
+				DestroyImmediate(_mesh);
 		}
 	}
 }
