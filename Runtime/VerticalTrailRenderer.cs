@@ -5,7 +5,6 @@ using UnityEngine.Rendering;
 namespace mitaywalle
 {
 	[ExecuteAlways]
-	[RequireComponent(typeof(MeshFilter))]
 	public class VerticalTrailRenderer : MonoBehaviour
 	{
 		public enum UpMode
@@ -46,9 +45,7 @@ namespace mitaywalle
 		[SerializeField] private LightProbeUsage _lightProbeUsage = LightProbeUsage.Off;
 		[SerializeField] private LightProbeProxyVolume _lightProbeProxyVolumeOverride;
 
-		private MeshFilter _meshFilter;
 		private Mesh _mesh;
-		private MaterialPropertyBlock _matProps;
 
 		private Vector3[] _vertices;
 		private Vector2[] _uvs;
@@ -65,17 +62,12 @@ namespace mitaywalle
 
 		private void OnEnable()
 		{
-			_meshFilter = GetComponent<MeshFilter>();
-			_matProps ??= new MaterialPropertyBlock();
 			InitializeMesh();
 		}
 
 		private void OnValidate()
 		{
 			using var _ = ValidateMarker.Auto();
-
-			_meshFilter = GetComponent<MeshFilter>();
-			_matProps ??= new MaterialPropertyBlock();
 
 			if (_maxSegments < 1)
 				_maxSegments = 1;
@@ -99,9 +91,6 @@ namespace mitaywalle
 		{
 			using var _ = UpdateMarker.Auto();
 
-			if (_meshFilter == null)
-				_meshFilter = GetComponent<MeshFilter>();
-
 			if (_points == null || _mesh == null)
 				InitializeMesh();
 
@@ -120,7 +109,7 @@ namespace mitaywalle
 		{
 			using var _ = InitializeMeshMarker.Auto();
 
-			if (_meshFilter == null || _maxSegments <= 0)
+			if (_maxSegments <= 0)
 				return;
 
 			int maxVertices = (_maxSegments + 1) * 2;
@@ -144,6 +133,7 @@ namespace mitaywalle
 				{
 					name = "VerticalTrail"
 				};
+
 				_mesh.MarkDynamic();
 			}
 			else
@@ -155,7 +145,6 @@ namespace mitaywalle
 			_mesh.uv = _uvs;
 			_mesh.colors = _colors;
 			_mesh.triangles = _triangles;
-			_meshFilter.sharedMesh = _mesh;
 
 			if (Application.isPlaying)
 				AddPoint(transform.position);
@@ -209,10 +198,13 @@ namespace mitaywalle
 			{
 				case UpMode.World:
 					return Vector3.up;
+
 				case UpMode.Local:
 					return transform.up;
+
 				case UpMode.CachedPerPoint:
 					return _pointUps[index];
+
 				default:
 					return transform.up;
 			}
@@ -272,7 +264,8 @@ namespace mitaywalle
 						float normalizedAge = _trailLifetime > 0f
 							? Mathf.Clamp01(age / _trailLifetime)
 							: 1f;
-						color.a = _fadeCurve.Evaluate( normalizedAge);
+
+						color.a = _fadeCurve.Evaluate(normalizedAge);
 					}
 
 					_colors[vertexIndex] = color;
@@ -348,7 +341,6 @@ namespace mitaywalle
 				motionVectorMode = _motionVectors ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
 				lightProbeUsage = _lightProbeUsage,
 				lightProbeProxyVolume = _lightProbeProxyVolumeOverride,
-				matProps = _matProps
 			};
 
 			Graphics.RenderMesh(rp, _mesh, 0, Matrix4x4.identity);
