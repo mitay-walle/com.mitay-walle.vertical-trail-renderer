@@ -1,0 +1,21 @@
+{
+  "name": "com.mitay-walle.vertical-trail-renderer",
+  "version": "1.0.0",
+  "displayName": "Vertical Trail Renderer",
+  "description": "Component to render vertical trail",
+  "unity": "2018.4",
+    "keywords": [
+    "Graphic",
+	"VFX",
+	"Special Effects"
+  ],
+	"documentationUrl": "https://github.com/mitay-walle/com.mitay-walle.vertical-trail-renderer/blob/main/README.md",
+	"licensesUrl": "https://github.com/mitay-walle/com.mitay-walle.vertical-trail-renderer/blob/main/LICENSE",
+  "author": {
+    "name": "mitay-walle",
+    "email": "mitay-walle91@mail.ru",
+    "url": "https://github.com/mitay-walle"
+  },
+  "author": "mitay-walle <mitay-walle91@mail.ru> (https://github.com/mitay-walle)"
+}
+

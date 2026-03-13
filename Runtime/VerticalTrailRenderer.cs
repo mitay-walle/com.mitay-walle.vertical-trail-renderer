@@ -1,12 +1,11 @@
-using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Plugins.FX
+namespace mitaywalle
 {
 	[ExecuteAlways]
 	public class VerticalTrailRenderer : MonoBehaviour
 	{
-		[SerializeField, OnValueChanged("Validate")] private int _maxSegments = 250;
+		[SerializeField] private int _maxSegments = 250;
 		[SerializeField] private float _minDistance = 0.2f;
 		[SerializeField] private float _wallHeight = 5f;
 		[SerializeField] private float _trailLifetime = 3f;
