@@ -7,7 +7,7 @@ The issue is discussed here:
 https://discussions.unity.com/t/vertical-line-using-line-renderer-with-transform-z/762604
 
 # Solution
-`VerticalTrailRenderer`-script that generates a mesh.  
+`VerticalTrailRenderer`-script that generates a mesh, to draw vertical trail.  
 It records object movement and builds a vertical quad strip using a [Mesh](https://docs.unity3d.com/Manual/class-Mesh.html) rendered by a [MeshRenderer](https://docs.unity3d.com/Manual/class-MeshRenderer.html).
 
 - vertical trail generated from movement points  
