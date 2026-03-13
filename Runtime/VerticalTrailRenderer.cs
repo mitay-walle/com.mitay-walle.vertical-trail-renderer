@@ -41,7 +41,7 @@ namespace mitaywalle
 		[SerializeField] private ShadowCastingMode _shadowCastingMode = ShadowCastingMode.Off;
 		[SerializeField] private bool _receiveShadows;
 		[SerializeField] private bool _motionVectors;
-		[SerializeField] private uint _renderingLayerMask = 1;
+		[SerializeField] private RenderingLayerMask _renderingLayerMask = 1;
 		[SerializeField] private LightProbeUsage _lightProbeUsage = LightProbeUsage.Off;
 		[SerializeField] private LightProbeProxyVolume _lightProbeProxyVolumeOverride;
 
