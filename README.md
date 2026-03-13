@@ -15,4 +15,7 @@ It records object movement and builds a vertical quad strip using a [Mesh](https
 Script: :contentReference[oaicite:0]{index=0}
 
 # Installation
-Place the script anywhere inside **`Project/Assets/`** in a Unity project.
+Place the script anywhere inside **`Project/Assets/`** in a Unity project
+Add the script to a GameObject.
+Assign a material to `_trailMaterial`.
+Move the object — the script generates a vertical trail mesh automatically.
