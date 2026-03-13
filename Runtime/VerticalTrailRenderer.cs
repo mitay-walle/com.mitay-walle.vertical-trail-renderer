@@ -228,9 +228,6 @@ namespace mitaywalle
 			int triangleIndex = 0;
 			float currentTime = Time.time;
 
-			Vector3 min = new(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-			Vector3 max = new(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
-
 			{
 				using var __ = ClearUnusedVerticesMarker.Auto();
 
@@ -270,11 +267,6 @@ namespace mitaywalle
 
 					_colors[vertexIndex] = color;
 					_colors[vertexIndex + 1] = color;
-
-					min = Vector3.Min(min, worldBasePos);
-					min = Vector3.Min(min, worldTopPos);
-					max = Vector3.Max(max, worldBasePos);
-					max = Vector3.Max(max, worldTopPos);
 
 					vertexIndex += 2;
 				}
@@ -322,9 +314,8 @@ namespace mitaywalle
 			{
 				using var __ = RecalculateBoundsMarker.Auto();
 				_mesh.RecalculateBounds();
+				_worldBounds = _mesh.bounds;
 			}
-
-			_worldBounds.SetMinMax(min, max);
 		}
 
 		private void RenderMesh()
