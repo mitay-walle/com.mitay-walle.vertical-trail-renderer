@@ -9,8 +9,7 @@ It records object movement and builds a vertical quad strip using a [Mesh](https
 
 - vertical trail generated from movement points  
 - configurable lifetime and fade  
-- fixed buffers to avoid GC  
-- works in edit mode via [ExecuteAlways](https://docs.unity3d.com/ScriptReference/ExecuteAlways.html)
+- no GC  
 
 # Installation
 - Place the script anywhere inside **`Project/Assets/`** in a Unity project
