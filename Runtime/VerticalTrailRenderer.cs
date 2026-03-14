@@ -1,4 +1,9 @@
+using System;
+using System.Collections;
+using System.Linq;
+using System.Reflection;
 using Unity.Profiling;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -41,7 +46,7 @@ namespace mitaywalle
 		[SerializeField] private ShadowCastingMode _shadowCastingMode = ShadowCastingMode.Off;
 		[SerializeField] private bool _receiveShadows;
 		[SerializeField] private bool _motionVectors;
-		[SerializeField] private RenderingLayerMask _renderingLayerMask = 1;
+		[SerializeField, RenderingLayersMaskProperty] private uint _renderingLayerMask = 1;
 		[SerializeField] private LightProbeUsage _lightProbeUsage = LightProbeUsage.Off;
 		[SerializeField] private LightProbeProxyVolume _lightProbeProxyVolumeOverride;
 
@@ -67,7 +72,7 @@ namespace mitaywalle
 
 		private void OnValidate()
 		{
-			using var _ = ValidateMarker.Auto();
+			using ProfilerMarker.AutoScope _ = ValidateMarker.Auto();
 
 			if (_maxSegments < 1)
 				_maxSegments = 1;
@@ -89,7 +94,7 @@ namespace mitaywalle
 
 		private void Update()
 		{
-			using var _ = UpdateMarker.Auto();
+			using ProfilerMarker.AutoScope _ = UpdateMarker.Auto();
 
 			if (_points == null || _mesh == null)
 				InitializeMesh();
@@ -107,7 +112,7 @@ namespace mitaywalle
 
 		private void InitializeMesh()
 		{
-			using var _ = InitializeMeshMarker.Auto();
+			using ProfilerMarker.AutoScope _ = InitializeMeshMarker.Auto();
 
 			if (_maxSegments <= 0)
 				return;
@@ -152,7 +157,7 @@ namespace mitaywalle
 
 		private void AddPoint(Vector3 basePos)
 		{
-			using var _ = AddPointMarker.Auto();
+			using ProfilerMarker.AutoScope _ = AddPointMarker.Auto();
 
 			if (_pointCount >= _maxSegments + 1)
 				return;
@@ -166,7 +171,7 @@ namespace mitaywalle
 
 		private void RemoveOldPoints()
 		{
-			using var _ = RemoveOldPointsMarker.Auto();
+			using ProfilerMarker.AutoScope _ = RemoveOldPointsMarker.Auto();
 
 			float currentTime = Time.time;
 			int removeCount = 0;
@@ -212,7 +217,7 @@ namespace mitaywalle
 
 		private void UpdateMesh()
 		{
-			using var _ = UpdateMeshMarker.Auto();
+			using ProfilerMarker.AutoScope _ = UpdateMeshMarker.Auto();
 
 			if (_mesh == null)
 				return;
@@ -229,7 +234,7 @@ namespace mitaywalle
 			float currentTime = Time.time;
 
 			{
-				using var __ = ClearUnusedVerticesMarker.Auto();
+				using ProfilerMarker.AutoScope __ = ClearUnusedVerticesMarker.Auto();
 
 				for (int i = _pointCount * 2; i < _vertices.Length; i++)
 				{
@@ -240,7 +245,7 @@ namespace mitaywalle
 			}
 
 			{
-				using var __ = BuildVerticesMarker.Auto();
+				using ProfilerMarker.AutoScope __ = BuildVerticesMarker.Auto();
 
 				for (int i = 0; i < _pointCount; i++)
 				{
@@ -273,14 +278,14 @@ namespace mitaywalle
 			}
 
 			{
-				using var __ = ClearUnusedTrianglesMarker.Auto();
+				using ProfilerMarker.AutoScope __ = ClearUnusedTrianglesMarker.Auto();
 
 				for (int i = (_pointCount - 1) * 6; i < _triangles.Length; i++)
 					_triangles[i] = 0;
 			}
 
 			{
-				using var __ = BuildTrianglesMarker.Auto();
+				using ProfilerMarker.AutoScope __ = BuildTrianglesMarker.Auto();
 
 				for (int i = 0; i < _pointCount - 1; i++)
 				{
@@ -299,7 +304,7 @@ namespace mitaywalle
 			}
 
 			{
-				using var __ = UploadMeshMarker.Auto();
+				using ProfilerMarker.AutoScope __ = UploadMeshMarker.Auto();
 				_mesh.vertices = _vertices;
 				_mesh.uv = _uvs;
 				_mesh.colors = _colors;
@@ -307,12 +312,12 @@ namespace mitaywalle
 			}
 
 			{
-				using var __ = RecalculateNormalsMarker.Auto();
+				using ProfilerMarker.AutoScope __ = RecalculateNormalsMarker.Auto();
 				_mesh.RecalculateNormals();
 			}
 
 			{
-				using var __ = RecalculateBoundsMarker.Auto();
+				using ProfilerMarker.AutoScope __ = RecalculateBoundsMarker.Auto();
 				_mesh.RecalculateBounds();
 				_worldBounds = _mesh.bounds;
 			}
@@ -320,9 +325,9 @@ namespace mitaywalle
 
 		private void RenderMesh()
 		{
-			using var _ = RenderMeshMarker.Auto();
+			using ProfilerMarker.AutoScope _ = RenderMeshMarker.Auto();
 
-			var rp = new RenderParams(_trailMaterial)
+			RenderParams rp = new RenderParams(_trailMaterial)
 			{
 				layer = gameObject.layer,
 				renderingLayerMask = _renderingLayerMask,
@@ -354,4 +359,119 @@ namespace mitaywalle
 				DestroyImmediate(_mesh);
 		}
 	}
+
+	public class RenderingLayersMaskPropertyAttribute : PropertyAttribute
+	{
+		public RenderingLayersMaskPropertyAttribute() { }
+	}
+
+	#if UNITY_EDITOR
+	[CustomPropertyDrawer(typeof(RenderingLayersMaskPropertyAttribute))]
+	public class RenderingLayersMaskPropertyDrawer : PropertyDrawer
+	{
+		private static string[] m_DefaultRenderingLayerNames;
+
+		private static string[] defaultRenderingLayerNames
+		{
+			get
+			{
+				if (m_DefaultRenderingLayerNames == null)
+				{
+					m_DefaultRenderingLayerNames = new string[32];
+					for (int i = 0; i < m_DefaultRenderingLayerNames.Length; ++i)
+					{
+						m_DefaultRenderingLayerNames[i] = string.Format("Layer{0}", i + 1);
+					}
+				}
+
+				return m_DefaultRenderingLayerNames;
+			}
+		}
+
+		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+		{
+			RenderPipelineAsset srpAsset = GraphicsSettings.currentRenderPipeline;
+			bool usingSRP = srpAsset != null;
+			if (!usingSRP) { return; }
+
+			#if UNITY_6000_0_OR_NEWER
+			string[] layerNames = RenderingLayerMask.GetDefinedRenderingLayerNames();
+			#else
+			string[] layerNames = srpAsset.renderingLayerMaskNames;
+			#endif
+			if (layerNames == null)
+			{
+				layerNames = defaultRenderingLayerNames;
+			}
+
+			object owner = GetParent(property);
+			uint mask = (uint)fieldInfo.GetValue(owner);
+
+			EditorGUI.BeginProperty(position, label, property);
+			Rect fieldRect = EditorGUI.PrefixLabel(position, new GUIContent(property.displayName));
+			uint newMask = (uint)EditorGUI.MaskField(fieldRect, (int)mask, layerNames);
+			if (newMask != mask)
+			{
+				property.uintValue = newMask;
+			}
+
+			EditorGUI.EndProperty();
+		}
+
+		//
+		public static object GetParent(SerializedProperty prop)
+		{
+			string path = prop.propertyPath.Replace(".Array.data[", "[");
+			object obj = prop.serializedObject.targetObject;
+			string[] elements = path.Split('.');
+			foreach (string element in elements.Take(elements.Length - 1))
+			{
+				if (element.Contains("["))
+				{
+					string elementName = element.Substring(0, element.IndexOf("["));
+					int index = Convert.ToInt32(element.Substring(element.IndexOf("[")).Replace("[", "").Replace("]", ""));
+					obj = GetValue(obj, elementName, index);
+				}
+				else
+				{
+					obj = GetValue(obj, element);
+				}
+			}
+
+			return obj;
+		}
+
+		private static object GetValue(object source, string name)
+		{
+			if (source == null)
+				return null;
+
+			Type type = source.GetType();
+			FieldInfo f = type.GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+			if (f == null)
+			{
+				PropertyInfo p = type.GetProperty(name,
+					BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+				if (p == null)
+					return null;
+
+				return p.GetValue(source, null);
+			}
+
+			return f.GetValue(source);
+		}
+
+		private static object GetValue(object source, string name, int index)
+		{
+			IEnumerable enumerable = GetValue(source, name) as IEnumerable;
+			IEnumerator enm = enumerable.GetEnumerator();
+			while (index-- >= 0)
+				enm.MoveNext();
+
+			return enm.Current;
+		}
+	}
+
+	#endif
 }
