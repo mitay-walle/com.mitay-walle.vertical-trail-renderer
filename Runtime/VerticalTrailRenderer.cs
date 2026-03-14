@@ -36,6 +36,8 @@ namespace mitaywalle
 
 		[SerializeField] private int _maxSegments = 250;
 		[SerializeField] private float _minDistance = 0.2f;
+		[SerializeField] private Vector3 _worldOffset;
+		[SerializeField] private Vector3 _localOffset;
 		[SerializeField] private float _wallHeight = 5f;
 		[SerializeField] private float _trailLifetime = 3f;
 		[SerializeField] private bool _fadeTrail = true;
@@ -99,7 +101,8 @@ namespace mitaywalle
 			if (_points == null || _mesh == null)
 				InitializeMesh();
 
-			Vector3 pos = transform.position;
+			Vector3 pos = _worldOffset + transform.TransformPoint(_localOffset);
+
 			if ((pos - _lastPos).sqrMagnitude >= _minDistance * _minDistance)
 				AddPoint(pos);
 
@@ -357,6 +360,12 @@ namespace mitaywalle
 				Destroy(_mesh);
 			else
 				DestroyImmediate(_mesh);
+		}
+
+		private void OnDrawGizmosSelected()
+		{
+			Vector3 pos = _worldOffset + transform.TransformPoint(_localOffset);
+			Gizmos.DrawWireSphere(pos, .1f);
 		}
 	}
 
