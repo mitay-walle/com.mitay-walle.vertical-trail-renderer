@@ -12,7 +12,7 @@ namespace mitaywalle
 	[ExecuteAlways]
 	public class VerticalTrailRenderer : MonoBehaviour
 	{
-		public enum UpMode
+		public enum eUpMode
 		{
 			World,
 			Local,
@@ -34,38 +34,39 @@ namespace mitaywalle
 		private static readonly ProfilerMarker RenderMeshMarker = new("VerticalTrailRenderer.RenderMesh");
 		private static readonly ProfilerMarker ValidateMarker = new("VerticalTrailRenderer.Validate");
 
-		[SerializeField] private int _maxSegments = 250;
-		[SerializeField] private float _minDistance = 0.2f;
-		[SerializeField] private Vector3 _worldOffset;
-		[SerializeField] private Vector3 _localOffset;
-		[SerializeField] private float _wallHeight = 5f;
-		[SerializeField] private float _trailLifetime = 3f;
-		[SerializeField] private bool _fadeTrail = true;
-		[SerializeField] private AnimationCurve _fadeCurve = AnimationCurve.EaseInOut(0, 1, 1, 0);
-		[SerializeField] private Material _trailMaterial;
-		[SerializeField] private UpMode _upMode = UpMode.World;
+		[SerializeField] private int maxSegments = 250;
 
-		[SerializeField] private ShadowCastingMode _shadowCastingMode = ShadowCastingMode.Off;
-		[SerializeField] private bool _receiveShadows;
-		[SerializeField] private bool _motionVectors;
-		[SerializeField, RenderingLayersMaskProperty] private uint _renderingLayerMask = 1;
-		[SerializeField] private LightProbeUsage _lightProbeUsage = LightProbeUsage.Off;
-		[SerializeField] private LightProbeProxyVolume _lightProbeProxyVolumeOverride;
+		public float MinDistance = 0.2f;
+		public Vector3 WorldOffset;
+		public Vector3 LocalOffset;
+		public float WallHeight = 5f;
+		public float TrailLifetime = 3f;
+		public bool FadeTrail = true;
+		public AnimationCurve FadeCurve = AnimationCurve.EaseInOut(0, 1, 1, 0);
+		public Material TrailMaterial;
+		public eUpMode UpMode = eUpMode.World;
 
-		private Mesh _mesh;
+		public ShadowCastingMode ShadowCastingMode = ShadowCastingMode.Off;
+		public bool ReceiveShadows;
+		public bool MotionVectors;
+		public LightProbeUsage LightProbeUsage = LightProbeUsage.Off;
+		public LightProbeProxyVolume LightProbeProxyVolumeOverride;
+		[RenderingLayersMaskProperty] public uint RenderingLayerMask = 1;
 
-		private Vector3[] _vertices;
-		private Vector2[] _uvs;
-		private Color[] _colors;
-		private int[] _triangles;
+		private Mesh mesh;
 
-		private Vector3[] _points;
-		private Vector3[] _pointUps;
-		private float[] _pointTimes;
-		private int _pointCount;
-		private Vector3 _lastPos;
+		private Vector3[] vertices;
+		private Vector2[] uvs;
+		private Color[] colors;
+		private int[] triangles;
 
-		private Bounds _worldBounds;
+		private Vector3[] points;
+		private Vector3[] pointUps;
+		private float[] pointTimes;
+		private int pointCount;
+		private Vector3 lastPos;
+
+		private Bounds worldBounds;
 
 		private void OnEnable()
 		{
@@ -76,17 +77,17 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = ValidateMarker.Auto();
 
-			if (_maxSegments < 1)
-				_maxSegments = 1;
+			if (maxSegments < 1)
+				maxSegments = 1;
 
-			if (_minDistance < 0f)
-				_minDistance = 0f;
+			if (MinDistance < 0f)
+				MinDistance = 0f;
 
-			if (_trailLifetime < 0f)
-				_trailLifetime = 0f;
+			if (TrailLifetime < 0f)
+				TrailLifetime = 0f;
 
-			if (_wallHeight < 0f)
-				_wallHeight = 0f;
+			if (WallHeight < 0f)
+				WallHeight = 0f;
 
 			if (!isActiveAndEnabled)
 				return;
@@ -98,18 +99,18 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = UpdateMarker.Auto();
 
-			if (_points == null || _mesh == null)
+			if (points == null || mesh == null)
 				InitializeMesh();
 
-			Vector3 pos = _worldOffset + transform.TransformPoint(_localOffset);
+			Vector3 pos = WorldOffset + transform.TransformPoint(LocalOffset);
 
-			if ((pos - _lastPos).sqrMagnitude >= _minDistance * _minDistance)
+			if ((pos - lastPos).sqrMagnitude >= MinDistance * MinDistance)
 				AddPoint(pos);
 
 			RemoveOldPoints();
 			UpdateMesh();
 
-			if (_mesh != null && _trailMaterial != null && _pointCount >= 2)
+			if (mesh != null && TrailMaterial != null && pointCount >= 2)
 				RenderMesh();
 		}
 
@@ -117,42 +118,42 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = InitializeMeshMarker.Auto();
 
-			if (_maxSegments <= 0)
+			if (maxSegments <= 0)
 				return;
 
-			int maxVertices = (_maxSegments + 1) * 2;
-			int maxTriangles = _maxSegments * 6;
+			int maxVertices = (maxSegments + 1) * 2;
+			int maxTriangles = maxSegments * 6;
 
-			_vertices = new Vector3[maxVertices];
-			_uvs = new Vector2[maxVertices];
-			_colors = new Color[maxVertices];
-			_triangles = new int[maxTriangles];
+			vertices = new Vector3[maxVertices];
+			uvs = new Vector2[maxVertices];
+			colors = new Color[maxVertices];
+			triangles = new int[maxTriangles];
 
-			_points = new Vector3[_maxSegments + 1];
-			_pointUps = new Vector3[_maxSegments + 1];
-			_pointTimes = new float[_maxSegments + 1];
-			_pointCount = 0;
-			_lastPos = transform.position;
-			_worldBounds = new Bounds(transform.position, Vector3.zero);
+			points = new Vector3[maxSegments + 1];
+			pointUps = new Vector3[maxSegments + 1];
+			pointTimes = new float[maxSegments + 1];
+			pointCount = 0;
+			lastPos = transform.position;
+			worldBounds = new Bounds(transform.position, Vector3.zero);
 
-			if (_mesh == null)
+			if (mesh == null)
 			{
-				_mesh = new Mesh
+				mesh = new Mesh
 				{
 					name = "VerticalTrail"
 				};
 
-				_mesh.MarkDynamic();
+				mesh.MarkDynamic();
 			}
 			else
 			{
-				_mesh.Clear();
+				mesh.Clear();
 			}
 
-			_mesh.vertices = _vertices;
-			_mesh.uv = _uvs;
-			_mesh.colors = _colors;
-			_mesh.triangles = _triangles;
+			mesh.vertices = vertices;
+			mesh.uv = uvs;
+			mesh.colors = colors;
+			mesh.triangles = triangles;
 
 			if (Application.isPlaying)
 				AddPoint(transform.position);
@@ -162,14 +163,14 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = AddPointMarker.Auto();
 
-			if (_pointCount >= _maxSegments + 1)
+			if (pointCount >= maxSegments + 1)
 				return;
 
-			_points[_pointCount] = basePos;
-			_pointUps[_pointCount] = transform.up;
-			_pointTimes[_pointCount] = Time.time;
-			_pointCount++;
-			_lastPos = basePos;
+			points[pointCount] = basePos;
+			pointUps[pointCount] = transform.up;
+			pointTimes[pointCount] = Time.time;
+			pointCount++;
+			lastPos = basePos;
 		}
 
 		private void RemoveOldPoints()
@@ -179,9 +180,9 @@ namespace mitaywalle
 			float currentTime = Time.time;
 			int removeCount = 0;
 
-			for (int i = 0; i < _pointCount; i++)
+			for (int i = 0; i < pointCount; i++)
 			{
-				if (currentTime - _pointTimes[i] > _trailLifetime)
+				if (currentTime - pointTimes[i] > TrailLifetime)
 					removeCount++;
 				else
 					break;
@@ -190,28 +191,28 @@ namespace mitaywalle
 			if (removeCount <= 0)
 				return;
 
-			for (int i = 0; i < _pointCount - removeCount; i++)
+			for (int i = 0; i < pointCount - removeCount; i++)
 			{
-				_points[i] = _points[i + removeCount];
-				_pointUps[i] = _pointUps[i + removeCount];
-				_pointTimes[i] = _pointTimes[i + removeCount];
+				points[i] = points[i + removeCount];
+				pointUps[i] = pointUps[i + removeCount];
+				pointTimes[i] = pointTimes[i + removeCount];
 			}
 
-			_pointCount -= removeCount;
+			pointCount -= removeCount;
 		}
 
 		private Vector3 GetUp(int index)
 		{
-			switch (_upMode)
+			switch (UpMode)
 			{
-				case UpMode.World:
+				case eUpMode.World:
 					return Vector3.up;
 
-				case UpMode.Local:
+				case eUpMode.Local:
 					return transform.up;
 
-				case UpMode.CachedPerPoint:
-					return _pointUps[index];
+				case eUpMode.CachedPerPoint:
+					return pointUps[index];
 
 				default:
 					return transform.up;
@@ -222,13 +223,13 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = UpdateMeshMarker.Auto();
 
-			if (_mesh == null)
+			if (mesh == null)
 				return;
 
-			if (_pointCount < 2)
+			if (pointCount < 2)
 			{
-				_mesh.Clear();
-				_worldBounds = new Bounds(transform.position, Vector3.zero);
+				mesh.Clear();
+				worldBounds = new Bounds(transform.position, Vector3.zero);
 				return;
 			}
 
@@ -239,42 +240,42 @@ namespace mitaywalle
 			{
 				using ProfilerMarker.AutoScope __ = ClearUnusedVerticesMarker.Auto();
 
-				for (int i = _pointCount * 2; i < _vertices.Length; i++)
+				for (int i = pointCount * 2; i < vertices.Length; i++)
 				{
-					_vertices[i] = Vector3.zero;
-					_uvs[i] = Vector2.zero;
-					_colors[i] = Color.clear;
+					vertices[i] = Vector3.zero;
+					uvs[i] = Vector2.zero;
+					colors[i] = Color.clear;
 				}
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = BuildVerticesMarker.Auto();
 
-				for (int i = 0; i < _pointCount; i++)
+				for (int i = 0; i < pointCount; i++)
 				{
-					Vector3 worldBasePos = _points[i];
-					Vector3 worldTopPos = worldBasePos + GetUp(i) * _wallHeight;
+					Vector3 worldBasePos = points[i];
+					Vector3 worldTopPos = worldBasePos + GetUp(i) * WallHeight;
 
-					_vertices[vertexIndex] = worldBasePos;
-					_vertices[vertexIndex + 1] = worldTopPos;
+					vertices[vertexIndex] = worldBasePos;
+					vertices[vertexIndex + 1] = worldTopPos;
 
-					float u = _pointCount > 1 ? (float)i / (_pointCount - 1) : 0f;
-					_uvs[vertexIndex] = new Vector2(u, 0f);
-					_uvs[vertexIndex + 1] = new Vector2(u, 1f);
+					float u = pointCount > 1 ? (float)i / (pointCount - 1) : 0f;
+					uvs[vertexIndex] = new Vector2(u, 0f);
+					uvs[vertexIndex + 1] = new Vector2(u, 1f);
 
 					Color color = Color.white;
-					if (_fadeTrail)
+					if (FadeTrail)
 					{
-						float age = currentTime - _pointTimes[i];
-						float normalizedAge = _trailLifetime > 0f
-							? Mathf.Clamp01(age / _trailLifetime)
+						float age = currentTime - pointTimes[i];
+						float normalizedAge = TrailLifetime > 0f
+							? Mathf.Clamp01(age / TrailLifetime)
 							: 1f;
 
-						color.a = _fadeCurve.Evaluate(normalizedAge);
+						color.a = FadeCurve.Evaluate(normalizedAge);
 					}
 
-					_colors[vertexIndex] = color;
-					_colors[vertexIndex + 1] = color;
+					colors[vertexIndex] = color;
+					colors[vertexIndex + 1] = color;
 
 					vertexIndex += 2;
 				}
@@ -283,24 +284,24 @@ namespace mitaywalle
 			{
 				using ProfilerMarker.AutoScope __ = ClearUnusedTrianglesMarker.Auto();
 
-				for (int i = (_pointCount - 1) * 6; i < _triangles.Length; i++)
-					_triangles[i] = 0;
+				for (int i = (pointCount - 1) * 6; i < triangles.Length; i++)
+					triangles[i] = 0;
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = BuildTrianglesMarker.Auto();
 
-				for (int i = 0; i < _pointCount - 1; i++)
+				for (int i = 0; i < pointCount - 1; i++)
 				{
 					int baseIndex = i * 2;
 
-					_triangles[triangleIndex] = baseIndex;
-					_triangles[triangleIndex + 1] = baseIndex + 1;
-					_triangles[triangleIndex + 2] = baseIndex + 2;
+					triangles[triangleIndex] = baseIndex;
+					triangles[triangleIndex + 1] = baseIndex + 1;
+					triangles[triangleIndex + 2] = baseIndex + 2;
 
-					_triangles[triangleIndex + 3] = baseIndex + 1;
-					_triangles[triangleIndex + 4] = baseIndex + 3;
-					_triangles[triangleIndex + 5] = baseIndex + 2;
+					triangles[triangleIndex + 3] = baseIndex + 1;
+					triangles[triangleIndex + 4] = baseIndex + 3;
+					triangles[triangleIndex + 5] = baseIndex + 2;
 
 					triangleIndex += 6;
 				}
@@ -308,21 +309,21 @@ namespace mitaywalle
 
 			{
 				using ProfilerMarker.AutoScope __ = UploadMeshMarker.Auto();
-				_mesh.vertices = _vertices;
-				_mesh.uv = _uvs;
-				_mesh.colors = _colors;
-				_mesh.triangles = _triangles;
+				mesh.vertices = vertices;
+				mesh.uv = uvs;
+				mesh.colors = colors;
+				mesh.triangles = triangles;
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = RecalculateNormalsMarker.Auto();
-				_mesh.RecalculateNormals();
+				mesh.RecalculateNormals();
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = RecalculateBoundsMarker.Auto();
-				_mesh.RecalculateBounds();
-				_worldBounds = _mesh.bounds;
+				mesh.RecalculateBounds();
+				worldBounds = mesh.bounds;
 			}
 		}
 
@@ -330,41 +331,41 @@ namespace mitaywalle
 		{
 			using ProfilerMarker.AutoScope _ = RenderMeshMarker.Auto();
 
-			RenderParams rp = new RenderParams(_trailMaterial)
+			RenderParams rp = new RenderParams(TrailMaterial)
 			{
 				layer = gameObject.layer,
-				renderingLayerMask = _renderingLayerMask,
-				worldBounds = _worldBounds,
-				shadowCastingMode = _shadowCastingMode,
-				receiveShadows = _receiveShadows,
-				motionVectorMode = _motionVectors ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
-				lightProbeUsage = _lightProbeUsage,
-				lightProbeProxyVolume = _lightProbeProxyVolumeOverride,
+				renderingLayerMask = RenderingLayerMask,
+				worldBounds = worldBounds,
+				shadowCastingMode = ShadowCastingMode,
+				receiveShadows = ReceiveShadows,
+				motionVectorMode = MotionVectors ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
+				lightProbeUsage = LightProbeUsage,
+				lightProbeProxyVolume = LightProbeProxyVolumeOverride,
 			};
 
-			Graphics.RenderMesh(rp, _mesh, 0, Matrix4x4.identity);
+			Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
 		}
 
 		private void OnDisable()
 		{
-			if (_mesh != null)
-				_mesh.Clear();
+			if (mesh != null)
+				mesh.Clear();
 		}
 
 		private void OnDestroy()
 		{
-			if (_mesh == null)
+			if (mesh == null)
 				return;
 
 			if (Application.isPlaying)
-				Destroy(_mesh);
+				Destroy(mesh);
 			else
-				DestroyImmediate(_mesh);
+				DestroyImmediate(mesh);
 		}
 
 		private void OnDrawGizmosSelected()
 		{
-			Vector3 pos = _worldOffset + transform.TransformPoint(_localOffset);
+			Vector3 pos = WorldOffset + transform.TransformPoint(LocalOffset);
 			Gizmos.DrawWireSphere(pos, .1f);
 		}
 	}
@@ -378,30 +379,30 @@ namespace mitaywalle
 	[CustomPropertyDrawer(typeof(RenderingLayersMaskPropertyAttribute))]
 	public class RenderingLayersMaskPropertyDrawer : PropertyDrawer
 	{
-		private static string[] m_DefaultRenderingLayerNames;
+		private static string[] M_DEFAULT_RENDERING_LAYER_NAMES;
 
-		private static string[] defaultRenderingLayerNames
+		private static string[] DefaultRenderingLayerNames
 		{
 			get
 			{
-				if (m_DefaultRenderingLayerNames == null)
+				if (M_DEFAULT_RENDERING_LAYER_NAMES == null)
 				{
-					m_DefaultRenderingLayerNames = new string[32];
-					for (int i = 0; i < m_DefaultRenderingLayerNames.Length; ++i)
+					M_DEFAULT_RENDERING_LAYER_NAMES = new string[32];
+					for (int i = 0; i < M_DEFAULT_RENDERING_LAYER_NAMES.Length; ++i)
 					{
-						m_DefaultRenderingLayerNames[i] = string.Format("Layer{0}", i + 1);
+						M_DEFAULT_RENDERING_LAYER_NAMES[i] = string.Format("Layer{0}", i + 1);
 					}
 				}
 
-				return m_DefaultRenderingLayerNames;
+				return M_DEFAULT_RENDERING_LAYER_NAMES;
 			}
 		}
 
 		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
 		{
 			RenderPipelineAsset srpAsset = GraphicsSettings.currentRenderPipeline;
-			bool usingSRP = srpAsset != null;
-			if (!usingSRP) { return; }
+			bool usingSrp = srpAsset != null;
+			if (!usingSrp) { return; }
 
 			#if UNITY_6000_0_OR_NEWER
 			string[] layerNames = RenderingLayerMask.GetDefinedRenderingLayerNames();
@@ -410,7 +411,7 @@ namespace mitaywalle
 			#endif
 			if (layerNames == null)
 			{
-				layerNames = defaultRenderingLayerNames;
+				layerNames = DefaultRenderingLayerNames;
 			}
 
 			object owner = GetParent(property);
