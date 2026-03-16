@@ -8,13 +8,15 @@ https://discussions.unity.com/t/vertical-line-using-line-renderer-with-transform
 # Solution
 `VerticalTrailRenderer`-script that generates a mesh, to draw vertical trail.  
 It records object movement and builds a vertical quad strip using a [Mesh](https://docs.unity3d.com/Manual/class-Mesh.html) rendered by a [MeshRenderer](https://docs.unity3d.com/Manual/class-MeshRenderer.html).
-
 - vertical trail generated from movement points  
 - configurable lifetime and fade  
-- no GC  
-
+- no GC
+- 
 # Installation
-- Place the script anywhere inside **`Project/Assets/`** in a Unity project
+1. [install as package by Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html)
+2. Place the script `VerticalTrailRenderer.cs` anywhere inside **`Project/Assets/`** in a Unity project
+
+# Usage
 - Add the script to a GameObject.
 - Assign a material to `_trailMaterial`.
 - Move the object — the script generates a vertical trail mesh automatically.
