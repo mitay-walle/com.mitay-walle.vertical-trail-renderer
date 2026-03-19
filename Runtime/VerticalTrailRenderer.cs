@@ -45,6 +45,7 @@ namespace mitaywalle
 		public AnimationCurve FadeCurve = AnimationCurve.EaseInOut(0, 1, 1, 0);
 		public Material TrailMaterial;
 		public eUpMode UpMode = eUpMode.World;
+		public bool DoubleSideGeometry;
 
 		public ShadowCastingMode ShadowCastingMode = ShadowCastingMode.Off;
 		public bool ReceiveShadows;
@@ -121,8 +122,9 @@ namespace mitaywalle
 			if (maxSegments <= 0)
 				return;
 
-			int maxVertices = (maxSegments + 1) * 2;
-			int maxTriangles = maxSegments * 6;
+			int sideMultiplier = DoubleSideGeometry ? 2 : 1;
+			int maxVertices = (maxSegments + 1) * 2 * sideMultiplier;
+			int maxTriangles = maxSegments * 6 * sideMultiplier;
 
 			vertices = new Vector3[maxVertices];
 			uvs = new Vector2[maxVertices];
@@ -233,14 +235,16 @@ namespace mitaywalle
 				return;
 			}
 
-			int vertexIndex = 0;
-			int triangleIndex = 0;
 			float currentTime = Time.time;
+			int sideMultiplier = DoubleSideGeometry ? 2 : 1;
+			int usedVertexCount = pointCount * 2 * sideMultiplier;
+			int usedTriangleCount = (pointCount - 1) * 6 * sideMultiplier;
+			int backVertexOffset = pointCount * 2;
 
 			{
 				using ProfilerMarker.AutoScope __ = ClearUnusedVerticesMarker.Auto();
 
-				for (int i = pointCount * 2; i < vertices.Length; i++)
+				for (int i = usedVertexCount; i < vertices.Length; i++)
 				{
 					vertices[i] = Vector3.zero;
 					uvs[i] = Vector2.zero;
@@ -255,13 +259,14 @@ namespace mitaywalle
 				{
 					Vector3 worldBasePos = points[i];
 					Vector3 worldTopPos = worldBasePos + GetUp(i) * WallHeight;
+					int frontVertexIndex = i * 2;
 
-					vertices[vertexIndex] = worldBasePos;
-					vertices[vertexIndex + 1] = worldTopPos;
+					vertices[frontVertexIndex] = worldBasePos;
+					vertices[frontVertexIndex + 1] = worldTopPos;
 
 					float u = pointCount > 1 ? (float)i / (pointCount - 1) : 0f;
-					uvs[vertexIndex] = new Vector2(u, 0f);
-					uvs[vertexIndex + 1] = new Vector2(u, 1f);
+					uvs[frontVertexIndex] = new Vector2(u, 0f);
+					uvs[frontVertexIndex + 1] = new Vector2(u, 1f);
 
 					Color color = Color.white;
 					if (FadeTrail)
@@ -274,22 +279,32 @@ namespace mitaywalle
 						color.a = FadeCurve.Evaluate(normalizedAge);
 					}
 
-					colors[vertexIndex] = color;
-					colors[vertexIndex + 1] = color;
+					colors[frontVertexIndex] = color;
+					colors[frontVertexIndex + 1] = color;
 
-					vertexIndex += 2;
+					if (!DoubleSideGeometry)
+						continue;
+
+					int backVertexIndex = backVertexOffset + i * 2;
+					vertices[backVertexIndex] = worldBasePos;
+					vertices[backVertexIndex + 1] = worldTopPos;
+					uvs[backVertexIndex] = new Vector2(1f - u, 0f);
+					uvs[backVertexIndex + 1] = new Vector2(1f - u, 1f);
+					colors[backVertexIndex] = color;
+					colors[backVertexIndex + 1] = color;
 				}
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = ClearUnusedTrianglesMarker.Auto();
 
-				for (int i = (pointCount - 1) * 6; i < triangles.Length; i++)
+				for (int i = usedTriangleCount; i < triangles.Length; i++)
 					triangles[i] = 0;
 			}
 
 			{
 				using ProfilerMarker.AutoScope __ = BuildTrianglesMarker.Auto();
+				int triangleIndex = 0;
 
 				for (int i = 0; i < pointCount - 1; i++)
 				{
@@ -304,6 +319,24 @@ namespace mitaywalle
 					triangles[triangleIndex + 5] = baseIndex + 2;
 
 					triangleIndex += 6;
+				}
+
+				if (DoubleSideGeometry)
+				{
+					for (int i = 0; i < pointCount - 1; i++)
+					{
+						int baseIndex = backVertexOffset + i * 2;
+
+						triangles[triangleIndex] = baseIndex;
+						triangles[triangleIndex + 1] = baseIndex + 2;
+						triangles[triangleIndex + 2] = baseIndex + 1;
+
+						triangles[triangleIndex + 3] = baseIndex + 1;
+						triangles[triangleIndex + 4] = baseIndex + 2;
+						triangles[triangleIndex + 5] = baseIndex + 3;
+
+						triangleIndex += 6;
+					}
 				}
 			}
 
