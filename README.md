@@ -11,7 +11,8 @@ It records object movement and builds a vertical quad strip using a [Mesh](https
 - vertical trail generated from movement points  
 - configurable lifetime and fade  
 - no GC
-- 
+- full rendering options (render layer ,shadows, probes, bounds etc)
+- optional double sided geometry
 # Installation
 1. [install as package by Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html)
 2. Place the script `VerticalTrailRenderer.cs` anywhere inside **`Project/Assets/`** in a Unity project
