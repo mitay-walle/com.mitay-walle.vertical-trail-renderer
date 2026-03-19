@@ -1,6 +1,6 @@
 {
   "name": "com.mitay-walle.vertical-trail-renderer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Vertical Trail Renderer",
   "description": "Component to render vertical trail",
   "unity": "2018.4",
